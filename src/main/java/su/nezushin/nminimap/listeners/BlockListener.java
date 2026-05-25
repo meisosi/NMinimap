@@ -37,7 +37,18 @@ public class BlockListener implements Listener {
     public void update(Block b) {
         if (b.getLightFromSky() == 15 || (b.getWorld().hasCeiling() && Config.skipCeiling))
             NMinimap.async(() -> {
-                NMinimap.getInstance().getChunkManager().reRenderChunk(new ChunkEntry(b.getWorld(), Math.floorDiv(b.getX(), 16), Math.floorDiv(b.getZ(), 16)));
+                int chunkX = Math.floorDiv(b.getX(), 16);
+                int chunkZ = Math.floorDiv(b.getZ(), 16);
+                
+                // Re-render surface layer
+                NMinimap.getInstance().getChunkManager().reRenderChunk(new ChunkEntry(b.getWorld(), chunkX, chunkZ, Integer.MAX_VALUE));
+                
+                // Re-render all configured underground layers
+                if (Config.layersEnabled) {
+                    for (var layer : Config.undergroundLayers) {
+                        NMinimap.getInstance().getChunkManager().reRenderChunk(new ChunkEntry(b.getWorld(), chunkX, chunkZ, layer.getRenderFromY()));
+                    }
+                }
             });
     }
 

@@ -105,6 +105,38 @@ public class RenderUtil {
         return new BlockDataInfo(blockData.getMapColor(), y, waterDepth);
     }
 
+     /**
+      * Get block data for custom layer rendering
+      * Searches for the highest non-transparent block below the specified renderFromY
+      */
+     public static BlockDataInfo getBlockDataWithRenderHeight(ChunkSnapshot c, int x, int z, int renderFromY, int minY, boolean hasCeiling) {
+         // If rendering from max height (surface), use normal method
+         if (renderFromY == Integer.MAX_VALUE) {
+             return getHighestBlockDataAt(c, x, z, minY, hasCeiling);
+         }
+         
+         // Start from renderFromY and search downwards
+         int y = Math.min(renderFromY, c.getHighestBlockYAt(x, z));
+         
+         // Search downwards for first non-transparent block
+         while (y > minY && isTransparent(c.getBlockType(x, y, z))) {
+             y--;
+         }
+         
+         if (y < minY) {
+             y = minY;
+         }
+
+         var blockData = c.getBlockData(x, y, z);
+         var waterDepth = 0;
+
+         if (blockData.getMaterial() == Material.WATER) {
+             waterDepth = getWaterDepth(c, x, y, z, Math.max(y - 12, minY));
+         }
+
+         return new BlockDataInfo(blockData.getMapColor(), y, waterDepth);
+     }
+
     public static BlockDataInfo getMostCommonOpaqueBlockBlockData(BlockDataInfo[] infoArray, int x, int z, int scale) {
         if (scale == 1)
             return infoArray[x + (z * 16)];

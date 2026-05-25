@@ -40,9 +40,9 @@ public class ChunkRender {
                 for (var x = 0; x < 16; x++) {
                     for (var z = 0; z < 16; z++) {
                         if (z < 8) {
-                            northChunk[x + (z * 16)] = RenderUtil.getHighestBlockDataAt(northChunkSnapshot, x, 15 - z, minY, hasCeiling);
+                            northChunk[x + (z * 16)] = RenderUtil.getBlockDataWithRenderHeight(northChunkSnapshot, x, 15 - z, chunk.renderFromY(), minY, hasCeiling);
                         }
-                        currentChunk[x + (z * 16)] = RenderUtil.getHighestBlockDataAt(chunkSnapshot, x, z, minY, hasCeiling);
+                        currentChunk[x + (z * 16)] = RenderUtil.getBlockDataWithRenderHeight(chunkSnapshot, x, z, chunk.renderFromY(), minY, hasCeiling);
                     }
                 }
 

@@ -33,6 +33,39 @@ map-pixel-size: 127
 #true - also display territory under the ceiling
 skip-ceiling: true
 
+#Underground layer (cave) detection and rendering based on WorldGuard regions
+layers:
+  #Enable layer switching (surface/cave)
+  enabled: true
+  #Configure underground layers
+  underground-layers:
+    cave-level-1:
+      #Y-level to start rendering from (blocks above this Y won't be rendered)
+      render-from-y: 55
+      #WorldGuard region names that trigger this layer
+      worldguard-regions:
+        - "goblin_mine"
+        - "cave_level_1"
+        - "cave_region_1"
+      #Priority: higher priority wins if player is in multiple regions (optional, default: 0)
+      priority: 1
+    cave-deep:
+      render-from-y: 30
+      worldguard-regions:
+        - "cave_deep"
+        - "dungeon"
+      priority: 2
+    mountain-cave:
+      render-from-y: 120
+      worldguard-regions:
+        - "mountain_cave"
+        - "peaks_cave"
+      priority: 1
+  #Deprecated options (kept for backward compatibility):
+  cave-threshold-y: 50
+  enable-worldguard-detection: false
+  auto-switch-on-movement: true
+
 database:
   mysql:
     #Use mysql or sqlite?

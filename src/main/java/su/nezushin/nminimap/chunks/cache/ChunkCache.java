@@ -40,14 +40,32 @@ public class ChunkCache {
         var reportTask = SchedulerUtil.getScheduler().async(() -> reportCacheLoadingStatus(), 40, 40);
         for (var file : Config.cacheFolder.listFiles()) {
             String[] name = file.getName().split("\\.");
-            if (name[3].equalsIgnoreCase("json")) {
+            if (name.length >= 4 && name[name.length - 2].equalsIgnoreCase("json")) {
                 file.delete();//old cache clear
                 deleted++;
                 continue;
             }
             if (!file.getName().endsWith(".bin.gz"))
                 continue;
-            cachedFiles.add(new ChunkEntry(Bukkit.getWorld(name[0]), Integer.parseInt(name[1]), Integer.parseInt(name[2])));
+            
+            // Parse filename to extract world, x, z, and renderFromY
+            // Formats: 
+            // - world.x.z.bin.gz (surface - Integer.MAX_VALUE)
+            // - world.x.z.Y.bin.gz (underground - specific Y)
+            try {
+                int x = Integer.parseInt(name[1]);
+                int z = Integer.parseInt(name[2]);
+                int renderFromY = Integer.MAX_VALUE; // Default to surface
+                
+                // If we have 5+ parts and part [3] is a number, it's the renderFromY
+                if (name.length >= 5 && name[3].matches("\\d+")) {
+                    renderFromY = Integer.parseInt(name[3]);
+                }
+                
+                cachedFiles.add(new ChunkEntry(Bukkit.getWorld(name[0]), x, z, renderFromY));
+            } catch (Exception e) {
+                NMinimap.getInstance().getLogger().warning("Failed to parse cache file: " + file.getName());
+            }
         }
         reportTask.cancel();
         NMinimap.getInstance().getLogger().info("Cache init done! Loaded " + cachedFiles.size() + " tiles. Deleted " + deleted + " old cache files.");

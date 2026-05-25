@@ -1,12 +1,12 @@
 package su.nezushin.nminimap.util.config;
 
 import com.google.common.collect.Lists;
-import com.tchristofferson.configupdater.ConfigUpdater;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import su.nezushin.nminimap.NMinimap;
+import su.nezushin.nminimap.layers.UndergroundLayer;
 import su.nezushin.nminimap.markers.impl.LocationMarker;
 import su.nezushin.nminimap.util.ChunkLoadingUtil;
 
@@ -21,18 +21,22 @@ public class Config {
 
     public static FileConfiguration config;
 
-    public static int mapId, maxRenderThreads = 30, maxTilesInRam = 100, maxScale = 8, mysqlPort, defaultScale, mapRenderInterval, mapPixelSize = 40;
+    public static int mapId, maxRenderThreads = 30, maxTilesInRam = 100, maxScale = 8, mysqlPort, defaultScale, mapRenderInterval, mapPixelSize = 40,
+            layersCaveThresholdY = 50;
 
     public static boolean allowFileCache = true, useMysql = false, mysqlUseSSL = false, resourcepackCopyDefaults = true,
             scaleUsePermission, defaultEnableAnyway, defaultRightSide, defaultRound, renderNewChunks, disableModMapActivated,
             disableModMapAlways, enableModVoxelMap, enableModXaerosMap, enableModJourneyMap, skipCeiling, allowModRadar,
-            packEnable1_21_11, packEnable26_1, packMcMetaChangeEnabled, checkForUpdates;
+            packEnable1_21_11, packEnable26_1, packMcMetaChangeEnabled, checkForUpdates, layersEnabled, 
+            layersEnableWorldGuardDetection, layersAutoSwitchOnMovement;
 
     public static long availableDiskSpaceThreshold = 14L * 1024L * 1024L * 1024L;
 
     public static List<String> resourcepackCopyDestinations = new ArrayList<>(), resourcepackZipDestinations = new ArrayList<>(), defaultEnableBrands = new ArrayList<>();
 
     public static List<StaticMarker> staticMarkers = new ArrayList<>();
+    
+    public static List<UndergroundLayer> undergroundLayers = new ArrayList<>();
 
     public static String playerMarker, anotherPlayerMarker, mysqlHost, mysqlUser, mysqlPassword, mysqlDatabase, mysqlPlayersTableName, langName,
             packDescription;
@@ -54,12 +58,6 @@ public class Config {
                 } catch (IOException ex) {
                     throw new RuntimeException(ex);
                 }
-            }
-        } else {
-            try {
-                ConfigUpdater.update(NMinimap.getInstance(), "config.yml", configFile);
-            } catch (IOException ex) {
-                throw new RuntimeException(ex);
             }
         }
 
@@ -145,6 +143,15 @@ public class Config {
 
         checkForUpdates = config.getBoolean("updates.check-for-updates", true);
 
+        // Layer configuration
+        layersEnabled = config.getBoolean("layers.enabled", true);
+        layersCaveThresholdY = config.getInt("layers.cave-threshold-y", 50);
+        layersEnableWorldGuardDetection = config.getBoolean("layers.enable-worldguard-detection", false);
+        layersAutoSwitchOnMovement = config.getBoolean("layers.auto-switch-on-movement", true);
+        
+        // Load underground layers from config
+        undergroundLayers = loadUndergroundLayers(config);
+
         cacheFolder = new File(plugin.getDataFolder(), "cache");
 
         cacheFolder.mkdirs();
@@ -219,8 +226,38 @@ public class Config {
                                     (float) config.getDouble("static-markers." + i + ".pitch", 0)
                             )),
                     i));
-        }
+         }
 
-        return list;
-    }
+         return list;
+     }
+
+     private static List<UndergroundLayer> loadUndergroundLayers(FileConfiguration config) {
+         var layers = new ArrayList<UndergroundLayer>();
+         var layersSection = config.getConfigurationSection("layers.underground-layers");
+         
+         if (layersSection == null) {
+             return layers;
+         }
+
+         for (var layerName : layersSection.getKeys(false)) {
+             String path = "layers.underground-layers." + layerName;
+             
+             var regions = config.getStringList(path + ".worldguard-regions").stream()
+                     .filter(i -> i != null && !i.isBlank())
+                     .map(String::toLowerCase)
+                     .toList();
+             int renderFromY = config.getInt(path + ".render-from-y", 64);
+             int priority = config.getInt(path + ".priority", 0);
+             
+             if (regions.isEmpty()) {
+                 NMinimap.getInstance().getLogger().warning("Underground layer '" + layerName + "' has no regions configured, skipping");
+                 continue;
+             }
+             
+             layers.add(new UndergroundLayer(layerName, regions, renderFromY, priority));
+             NMinimap.getInstance().getLogger().info("Loaded underground layer: " + layerName + " (Y=" + renderFromY + ", regions=" + regions + ", priority=" + priority + ")");
+         }
+
+         return layers;
+     }
 }

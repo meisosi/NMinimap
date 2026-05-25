@@ -15,6 +15,8 @@ import su.nezushin.nminimap.NMinimap;
 import su.nezushin.nminimap.api.events.AsyncMapRenderEvent;
 import su.nezushin.nminimap.api.events.AsyncMarkerRenderEvent;
 import su.nezushin.nminimap.chunks.ChunkEntry;
+import su.nezushin.nminimap.layers.LayerManager;
+import su.nezushin.nminimap.layers.UndergroundLayer;
 import su.nezushin.nminimap.markers.impl.LocationMarker;
 import su.nezushin.nminimap.util.config.Config;
 
@@ -32,6 +34,9 @@ public class NMapPlayer implements AnvilORMSerializable {
     private int scale = 1;
     @SqlColumn(type = SqlType.BOOLEAN)
     private boolean enabled = false, isRight, isRound;
+
+    // Y-level from which to render (Integer.MAX_VALUE for surface)
+    private int renderFromY = Integer.MAX_VALUE;
 
 
     public NMapPlayer(Player player, boolean enabled) {
@@ -85,10 +90,10 @@ public class NMapPlayer implements AnvilORMSerializable {
                 var localX = Math.floorMod(wx, 16);
                 var localZ = Math.floorMod(wz, 16);
 
-                var chunk = new ChunkEntry(world, cx, cz);
+                var chunk = new ChunkEntry(world, cx, cz, renderFromY);
                 var bytes = chunkManager.getOrRenderChunk(chunk).get(scale);
 
-                chunkManager.getLastChunkUse().put(new ChunkEntry(world, cx, cz), System.currentTimeMillis());
+                chunkManager.getLastChunkUse().put(new ChunkEntry(world, cx, cz, renderFromY), System.currentTimeMillis());
 
                 var indexXX = Math.floorDiv(localX, scale);
                 var indexZZ = Math.floorDiv(localZ, scale);
@@ -204,6 +209,30 @@ public class NMapPlayer implements AnvilORMSerializable {
     public void setRound(boolean round) {
         isRound = round;
         saveAsync();
+    }
+
+    public int getRenderFromY() {
+        return renderFromY;
+    }
+
+    public void setRenderFromY(int renderFromY) {
+        if (renderFromY != this.renderFromY) {
+            this.renderFromY = renderFromY;
+            // Request immediate map update when render height changes
+            sendMap();
+        }
+    }
+
+    /**
+     * Update player's render height based on WorldGuard regions
+     */
+    public void updateRenderHeightBasedOnRegions() {
+        if (!LayerManager.isLayerSwitchingEnabled() || player == null) {
+            return;
+        }
+        
+        int detectedRenderY = LayerManager.getRenderYForPlayer(player);
+        setRenderFromY(detectedRenderY);
     }
 
 
