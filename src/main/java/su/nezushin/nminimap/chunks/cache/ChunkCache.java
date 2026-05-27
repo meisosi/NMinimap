@@ -40,31 +40,41 @@ public class ChunkCache {
         var reportTask = SchedulerUtil.getScheduler().async(() -> reportCacheLoadingStatus(), 40, 40);
         for (var file : Config.cacheFolder.listFiles()) {
             String[] name = file.getName().split("\\.");
-            if (name.length >= 4 && name[3].equalsIgnoreCase("json")) {
+            if (name.length >= 4 && name[name.length - 2].equalsIgnoreCase("json")) {
                 file.delete();//old cache clear
                 deleted++;
                 continue;
             }
             if (!file.getName().endsWith(".bin.gz"))
                 continue;
-                
-            int z;
-            su.nezushin.nminimap.util.config.UndergroundLayer layer = null;
-            int layerIndex = name[2].indexOf("_layer_");
-            if (layerIndex != -1) {
-                z = Integer.parseInt(name[2].substring(0, layerIndex));
-                String layerId = name[2].substring(layerIndex + "_layer_".length());
-                for (su.nezushin.nminimap.util.config.UndergroundLayer l : Config.undergroundLayers) {
-                    if (l.id().equals(layerId)) {
-                        layer = l;
-                        break;
+            try {
+                int x = Integer.parseInt(name[1]);
+                String zPart = name[2];
+                int z;
+                int renderFromY = Integer.MAX_VALUE; // Default to surface
+
+                int layerIndex = zPart.indexOf("_layer_");
+                if (layerIndex != -1) {
+                    z = Integer.parseInt(zPart.substring(0, layerIndex));
+                    String layerId = zPart.substring(layerIndex + "_layer_".length());
+                    for (var layer : Config.undergroundLayers) {
+                        if (layer.id().equalsIgnoreCase(layerId)) {
+                            renderFromY = layer.renderFromY();
+                            break;
+                        }
                     }
+                } else {
+                    z = Integer.parseInt(zPart);
                 }
-            } else {
-                z = Integer.parseInt(name[2]);
+
+                if (name.length >= 5 && name[3].matches("-?\\d+")) {
+                    renderFromY = Integer.parseInt(name[3]);
+                }
+
+                cachedFiles.add(new ChunkEntry(Bukkit.getWorld(name[0]), x, z, renderFromY));
+            } catch (Exception e) {
+                NMinimap.getInstance().getLogger().warning("Failed to parse cache file: " + file.getName());
             }
-            
-            cachedFiles.add(new ChunkEntry(Bukkit.getWorld(name[0]), Integer.parseInt(name[1]), z, layer));
         }
         reportTask.cancel();
         NMinimap.getInstance().getLogger().info("Cache init done! Loaded " + cachedFiles.size() + " tiles. Deleted " + deleted + " old cache files.");

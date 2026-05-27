@@ -26,6 +26,32 @@ public class MinimapCommand implements CommandExecutor, TabCompleter {
 
 
         NMinimap.async(() -> {
+            if (args.length == 1 && args[0].equalsIgnoreCase("reload")) {
+                if (!Permission.admin.has(sender)) {
+                    Message.insufficient_permissions.send(sender);
+                    return;
+                }
+                Message.reload_start.send(sender);
+                try {
+                    NMinimap.sync(() -> {
+                        try {
+                            var nminimap = NMinimap.getInstance();
+
+                            nminimap.unload();
+                            nminimap.load();
+                            Message.reload_complete.send(sender);
+                        } catch (Exception ex) {
+                            Message.reload_failed.send(sender);
+                            NMinimap.getInstance().getLogger().log(Level.SEVERE, "Failed to reload plugin: ", ex);
+                        }
+                    });
+                } catch (Exception ex) {
+                    Message.reload_failed.send(sender);
+                    NMinimap.getInstance().getLogger().log(Level.SEVERE, "Failed to reload plugin: ", ex);
+                }
+                return;
+            }
+
             if (args.length == 2 && args[0].equalsIgnoreCase("admin")) {
                 if (args[1].equalsIgnoreCase("reload")) {
                     if (!Permission.admin.has(sender)) {
@@ -34,11 +60,18 @@ public class MinimapCommand implements CommandExecutor, TabCompleter {
                     }
                     Message.reload_start.send(sender);
                     try {
-                        var nminimap = NMinimap.getInstance();
+                        NMinimap.sync(() -> {
+                            try {
+                                var nminimap = NMinimap.getInstance();
 
-                        nminimap.unload();
-                        nminimap.load();
-                        Message.reload_complete.send(sender);
+                                nminimap.unload();
+                                nminimap.load();
+                                Message.reload_complete.send(sender);
+                            } catch (Exception ex) {
+                                Message.reload_failed.send(sender);
+                                NMinimap.getInstance().getLogger().log(Level.SEVERE, "Failed to reload plugin: ", ex);
+                            }
+                        });
                     } catch (Exception ex) {
                         Message.reload_failed.send(sender);
                         NMinimap.getInstance().getLogger().log(Level.SEVERE, "Failed to reload plugin: ", ex);
@@ -116,7 +149,7 @@ public class MinimapCommand implements CommandExecutor, TabCompleter {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String @NotNull [] args) {
         if (args.length == 1) {
-            return Lists.newArrayList("scale", "style", "side", "enable", "disable", "admin")
+            return Lists.newArrayList("scale", "style", "side", "enable", "disable", "reload", "admin")
                     .stream().filter(i -> StringUtil.startsWithIgnoreCase(i, args[0])).toList();
         } else if (args.length == 2) {
             if (args[0].equalsIgnoreCase("scale"))

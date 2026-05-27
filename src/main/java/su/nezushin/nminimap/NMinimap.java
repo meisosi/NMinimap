@@ -139,6 +139,10 @@ public final class NMinimap extends JavaPlugin {
             player.setEnabled(player.isEnabled());
 
             NMinimap.getInstance().getPlayersWithMap().add(player);
+
+            // Apply WorldGuard-based layer immediately after the player object is ready
+            var loadedPlayer = player;
+            sync(loadedPlayer::updateRenderHeightBasedOnRegions);
         });
     }
 

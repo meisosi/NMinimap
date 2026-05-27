@@ -13,19 +13,20 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class Config {
 
     public static FileConfiguration config;
 
-    public static int mapId, maxRenderThreads = 30, maxTilesInRam = 100, maxScale = 8, mysqlPort, defaultScale, mapRenderInterval, mapPixelSize = 40;
+    public static int mapId, maxRenderThreads = 30, maxTilesInRam = 100, maxScale = 8, mysqlPort, defaultScale, mapRenderInterval, mapPixelSize = 40,
+            layersCaveThresholdY = 50;
 
     public static boolean allowFileCache = true, useMysql = false, mysqlUseSSL = false, resourcepackCopyDefaults = true,
             scaleUsePermission, defaultEnableAnyway, defaultRightSide, defaultRound, renderNewChunks, disableModMapActivated,
             disableModMapAlways, enableModVoxelMap, enableModXaerosMap, enableModJourneyMap, skipCeiling, allowModRadar,
-            packEnable1_21_11, packEnable26_1, packMcMetaChangeEnabled, checkForUpdates;
+            packEnable1_21_11, packEnable26_1, packMcMetaChangeEnabled, checkForUpdates, layersEnabled,
+            layersEnableWorldGuardDetection, layersAutoSwitchOnMovement;
 
     public static long availableDiskSpaceThreshold = 14L * 1024L * 1024L * 1024L;
 
@@ -135,12 +136,19 @@ public class Config {
         packMcMetaChangeEnabled = config.getBoolean("resourcepack.pack-mcmeta.enable");
 
         mapPixelSize = Math.max(Math.min(config.getInt("map-pixel-size", 127), 127), 10);
-
-        undergroundLayers = loadUndergroundLayers(config);
         
         staticMarkers = loadLocationMarkers(config);
 
         checkForUpdates = config.getBoolean("updates.check-for-updates", true);
+
+        // Layer configuration
+        layersEnabled = config.getBoolean("layers.enabled", true);
+        layersCaveThresholdY = config.getInt("layers.cave-threshold-y", 50);
+        layersEnableWorldGuardDetection = config.getBoolean("layers.enable-worldguard-detection", false);
+        layersAutoSwitchOnMovement = config.getBoolean("layers.auto-switch-on-movement", true);
+
+        // Load underground layers from config
+        undergroundLayers = loadUndergroundLayers(config);
 
         cacheFolder = new File(plugin.getDataFolder(), "cache");
 
@@ -216,27 +224,45 @@ public class Config {
                                     (float) config.getDouble("static-markers." + i + ".pitch", 0)
                             )),
                     i));
-        }
+         }
 
         return list;
     }
-    
-    private static List<UndergroundLayer> loadUndergroundLayers(FileConfiguration config) {
-        var cs = config.getConfigurationSection("underground-layers");
-        if (cs == null)
-            return Lists.newArrayList();
 
-        List<UndergroundLayer> list = new ArrayList<>();
-        for (var key : cs.getKeys(false)) {
-            List<String> regions = config.getStringList("underground-layers." + key + ".wg-regions");
-            list.add(new UndergroundLayer(
-                    key,
-                    regions,
-                    config.getInt("underground-layers." + key + ".render-from-y", 64),
-                    config.getInt("underground-layers." + key + ".priority", 0),
-                    (float) config.getDouble("underground-layers." + key + ".darken", 0.5)
-            ));
+    private static List<UndergroundLayer> loadUndergroundLayers(FileConfiguration config) {
+        var layers = new ArrayList<UndergroundLayer>();
+        addUndergroundLayers(config, layers, "layers.underground-layers", "worldguard-regions");
+        addUndergroundLayers(config, layers, "underground-layers", "wg-regions");
+        return layers;
+    }
+
+    private static void addUndergroundLayers(FileConfiguration config, List<UndergroundLayer> layers, String rootPath, String regionsPath) {
+        var layersSection = config.getConfigurationSection(rootPath);
+        if (layersSection == null) {
+            return;
         }
-        return list;
+
+        for (var layerName : layersSection.getKeys(false)) {
+            if (layers.stream().anyMatch(layer -> layer.id().equalsIgnoreCase(layerName))) {
+                continue;
+            }
+
+            String path = rootPath + "." + layerName;
+            var regions = config.getStringList(path + "." + regionsPath).stream()
+                    .filter(i -> i != null && !i.isBlank())
+                    .map(String::toLowerCase)
+                    .toList();
+            if (regions.isEmpty()) {
+                NMinimap.getInstance().getLogger().warning("Underground layer '" + layerName + "' has no regions configured, skipping");
+                continue;
+            }
+
+            int renderFromY = config.getInt(path + ".render-from-y", 64);
+            int priority = config.getInt(path + ".priority", 0);
+            float darken = (float) config.getDouble(path + ".darken", 0.5D);
+
+            layers.add(new UndergroundLayer(layerName, regions, renderFromY, priority, darken));
+            NMinimap.getInstance().getLogger().info("Loaded underground layer: " + layerName + " (Y=" + renderFromY + ", regions=" + regions + ", priority=" + priority + ")");
+        }
     }
 }

@@ -17,9 +17,9 @@ import su.nezushin.nminimap.api.events.AsyncMarkerRenderEvent;
 import su.nezushin.nminimap.chunks.ChunkEntry;
 import su.nezushin.nminimap.compatibility.WorldGuardManager;
 import su.nezushin.nminimap.markers.impl.LocationMarker;
+import su.nezushin.nminimap.util.ColorUtil;
 import su.nezushin.nminimap.util.config.Config;
 import su.nezushin.nminimap.util.config.UndergroundLayer;
-import su.nezushin.nminimap.util.ColorUtil;
 
 public class NMapPlayer implements AnvilORMSerializable {
 
@@ -37,6 +37,9 @@ public class NMapPlayer implements AnvilORMSerializable {
     private int scale = 1;
     @SqlColumn(type = SqlType.BOOLEAN)
     private boolean enabled = false, isRight, isRound;
+
+    // Y-level from which to render (Integer.MAX_VALUE for surface)
+    private int renderFromY = Integer.MAX_VALUE;
 
 
     public NMapPlayer(Player player, boolean enabled) {
@@ -91,14 +94,14 @@ public class NMapPlayer implements AnvilORMSerializable {
 
                 var cx = Math.floorDiv(wx, 16);
                 var cz = Math.floorDiv(wz, 16);
+                var currentRenderFromY = this.activeLayer != null ? this.activeLayer.renderFromY() : renderFromY;
 
                 var localX = Math.floorMod(wx, 16);
                 var localZ = Math.floorMod(wz, 16);
 
-                var chunk = new ChunkEntry(world, cx, cz, this.activeLayer);
+                var chunk = new ChunkEntry(world, cx, cz, currentRenderFromY);
                 var bytes = chunkManager.getOrRenderChunk(chunk).get(scale);
-
-                chunkManager.getLastChunkUse().put(new ChunkEntry(world, cx, cz, this.activeLayer), System.currentTimeMillis());
+                chunkManager.getLastChunkUse().put(chunk, System.currentTimeMillis());
 
                 var indexXX = Math.floorDiv(localX, scale);
                 var indexZZ = Math.floorDiv(localZ, scale);
@@ -109,12 +112,12 @@ public class NMapPlayer implements AnvilORMSerializable {
                     // Check if block outside WG layer region
                     if (!WorldGuardManager.isInsideLayer(new Location(world, bX, this.activeLayer.renderFromY(), bZ), this.activeLayer)) {
                         // Load normal surface chunk for outside region
-                        var normalChunk = new ChunkEntry(world, cx, cz, null);
+                        var normalChunk = new ChunkEntry(world, cx, cz, Integer.MAX_VALUE);
                         var normalBytes = chunkManager.getOrRenderChunk(normalChunk).get(scale);
                         chunkManager.getLastChunkUse().put(normalChunk, System.currentTimeMillis());
                         
                         var normalColor = normalBytes != null ? normalBytes[indexXX + (indexZZ * chunkSize)] : 0;
-                        color = normalColor != 0 ? su.nezushin.nminimap.util.ColorUtil.darken(normalColor, this.activeLayer.darken()) : 0;
+                        color = normalColor != 0 ? ColorUtil.darken(normalColor, this.activeLayer.darken()) : 0;
                     }
                 }
 
@@ -229,6 +232,31 @@ public class NMapPlayer implements AnvilORMSerializable {
     public void setRound(boolean round) {
         isRound = round;
         saveAsync();
+    }
+
+    public int getRenderFromY() {
+        return renderFromY;
+    }
+
+    public void setRenderFromY(int renderFromY) {
+        if (renderFromY != this.renderFromY) {
+            this.renderFromY = renderFromY;
+            // Request immediate map update when render height changes
+            sendMap();
+        }
+    }
+
+    /**
+     * Update player's render height based on WorldGuard regions
+     */
+    public void updateRenderHeightBasedOnRegions() {
+        if (!Config.layersEnabled || player == null) {
+            return;
+        }
+
+        updateActiveLayer();
+        int detectedRenderY = activeLayer != null ? activeLayer.renderFromY() : Integer.MAX_VALUE;
+        setRenderFromY(detectedRenderY);
     }
 
 
