@@ -168,8 +168,14 @@ public class RenderUtil {
         int floorY = openingY;
         while (floorY >= searchMinY && smart.transparentBlocks().contains(c.getBlockType(x, floorY, z)))
             floorY--;
-        floorY = Math.max(floorY, searchMinY);
+        // The region floor limits the opening search, but the solid block immediately below it
+        // can still be the visible bottom of that opening.
+        if (floorY < minY || (floorY < searchMinY
+                && (!smart.useRegionFloor() || smart.transparentBlocks().contains(c.getBlockType(x, floorY, z)))))
+            return missingCaveSurface(c, x, z, minY, worldMaxY, hasCeiling, skipCeiling, ceilingBlocks, layer);
         var floor = c.getBlockData(x, floorY, z);
+        if (floor.getMapColor().asRGB() == 0)
+            return missingCaveSurface(c, x, z, minY, worldMaxY, hasCeiling, skipCeiling, ceilingBlocks, layer);
         int waterDepth = Math.min(fluidDepth, layer.waterRendering().maxSampledDepth());
         Color visible = fluid == Material.WATER ? c.getBlockData(x, openingY, z).getMapColor() : floor.getMapColor();
         return new BlockDataInfo(visible, floor.getMapColor(), floorY, waterDepth);

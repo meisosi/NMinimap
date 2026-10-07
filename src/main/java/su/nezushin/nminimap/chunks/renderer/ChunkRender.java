@@ -29,7 +29,7 @@ public class ChunkRender {
         Map<Long, CompletableFuture<Chunk>> nearby = new HashMap<>();
         nearby.put(ConnectedCaveCheck.chunkKey(0, 0), futureFirstChunk);
         nearby.put(ConnectedCaveCheck.chunkKey(0, -1), futureSecondChunk);
-        if (chunk.layer() != null && chunk.layer().smartDescend().minConnectedColumns() > 1) {
+        if (chunk.layer() != null && !chunk.surface() && chunk.layer().smartDescend().minConnectedColumns() > 1) {
             for (int dx = -1; dx <= 1; dx++)
                 for (int dz = -1; dz <= 1; dz++) {
                     long key = ConnectedCaveCheck.chunkKey(dx, dz);
@@ -108,7 +108,7 @@ public class ChunkRender {
                                         } else {
                                             color -= 1;
                                         }
-                                    } else {
+                                    } else if (waterDepth == 0) {
                                         var y = info.yLevel();
                                         double diff = (y - lastYLevel) * 4.0 / (scale + 4) + ((x + z & 1) - 0.5) * 0.4;
                                         if (diff > 0.6) {
@@ -119,7 +119,7 @@ public class ChunkRender {
                                         }
                                     }
 
-                                    if (info.missingCave() && chunk.layer() != null)
+                                    if (info.missingCave() && chunk.layer() != null && !chunk.surface())
                                         color = ColorUtil.darken(color, chunk.layer().darken());
 
                                     bytes[x + (z * (16 / scale))] = color;
@@ -151,9 +151,9 @@ public class ChunkRender {
     private static BlockDataInfo renderColumn(org.bukkit.ChunkSnapshot snapshot, int x, int z, int minY, int maxY,
                                                boolean hasCeiling, boolean skipCeiling, Set<Material> ceilingBlocks,
                                                ChunkEntry chunk, Chunk sourceChunk, ConnectedCaveCheck connectedCaveCheck) {
-        if (chunk.layer() == null)
+        if (chunk.layer() == null || chunk.surface())
             return RenderUtil.getHighestBlockDataAt(snapshot, x, z, minY, maxY, hasCeiling, skipCeiling, ceilingBlocks,
-                    Config.waterRendering.maxSampledDepth());
+                    (chunk.layer() == null ? Config.waterRendering : chunk.layer().waterRendering()).maxSampledDepth());
         Integer regionFloor = null;
         if (chunk.layer().smartDescend().useRegionFloor())
             regionFloor = NMinimap.getInstance().getWorldGuardManager().getLayerFloorAt(sourceChunk.getWorld(),

@@ -388,12 +388,14 @@ public class Config {
     }
 
     private static WaterRenderingSettings defaultWaterRendering() {
-        return new WaterRenderingSettings(WaterRenderingSettings.Mode.VANILLA, 0.35f, 0.1f, 0.65f,
+        return new WaterRenderingSettings(WaterRenderingSettings.Mode.VANILLA, WaterRenderingSettings.Scope.REGION,
+                0.35f, 0.1f, 0.65f,
                 12, Color.fromRGB(0x3F9FD4), WaterRenderingSettings.ColorSource.WATER, 12, 0f);
     }
 
     private static WaterRenderingSettings loadWaterRendering(FileConfiguration config, String path, WaterRenderingSettings defaults) {
         var mode = loadEnum(WaterRenderingSettings.Mode.class, config.getString(path + ".mode"), defaults.mode(), path + ".mode");
+        var scope = loadEnum(WaterRenderingSettings.Scope.class, config.getString(path + ".scope"), defaults.scope(), path + ".scope");
         var colorSource = loadEnum(WaterRenderingSettings.ColorSource.class, config.getString(path + ".color-source"), defaults.colorSource(), path + ".color-source");
         var tint = defaults.tint();
         var tintText = config.getString(path + ".tint");
@@ -406,6 +408,7 @@ public class Config {
         }
         return new WaterRenderingSettings(
                 mode,
+                scope,
                 (float) config.getDouble(path + ".opacity", defaults.opacity()),
                 (float) config.getDouble(path + ".min-opacity", defaults.minOpacity()),
                 (float) config.getDouble(path + ".max-opacity", defaults.maxOpacity()),

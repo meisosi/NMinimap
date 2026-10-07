@@ -58,6 +58,8 @@ or [Resource Pack Manager](https://www.spigotmc.org/resources/resource-pack-mana
 
 Water rendering can be configured globally with `water-rendering` and overridden for each underground layer. `vanilla` keeps the original map shading; `fixed` applies a constant tint opacity; `depth` interpolates between minimum and maximum opacity according to water depth; `disabled` shows the block below the water. `color-source` selects whether the tint is blended with the water color or the block below it. All opacity and darkening values are between `0.0` and `1.0`.
 
+The per-layer `water-rendering.scope` controls where its override applies. `region` (default) uses it only for pixels inside the layer's WorldGuard regions; outside pixels use the global water settings. `map` uses the layer's water settings across the whole minimap while the player is inside that layer, including surface pixels outside its regions. Outside pixels still use surface terrain and the layer's `darken` factor. The top-level `water-rendering` remains the default when no underground layer is active.
+
 Underground layers require WorldGuard regions. With `no-opening-mode: descend`, each map column searches downward from `render-from-y` for `min-open-height` consecutive blocks listed in `transparent-blocks`. `min-y` can be a numeric Y coordinate or `region-floor`, which uses the minimum Y of the covering WorldGuard region; it must be at or below `render-from-y`. A column without a qualifying opening shows the darkened surface. `no-opening-mode: fixed` (the default) checks only `render-from-y` and retains the original slice there when no opening is found. There is no separate `enabled` switch.
 
 An optional connectivity threshold excludes small isolated air or water pockets. `smart-descend-defaults.min-connected-columns` sets the default for all layers; a layer's `smart-descend.min-connected-columns` overrides it. `1` disables the connectivity check. Higher values require that many distinct horizontal columns in one six-directionally connected transparent space, searched within the current chunk and its eight neighbors. This is a local size check, not a pathfinding check from the player's position. Enabling it loads neighboring chunks during rendering and rerenders affected neighboring cached tiles after block changes.
@@ -87,6 +89,7 @@ underground-layers:
       min-connected-columns: 8
       transparent-blocks: [AIR, CAVE_AIR, VOID_AIR, WATER]
     water-rendering:
+      scope: map
       mode: fixed
       opacity: 0.15
       color-source: bottom

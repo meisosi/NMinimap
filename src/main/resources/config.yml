@@ -347,6 +347,9 @@ underground-layers:
 
     # Optional per-layer override. Omitted values inherit the global water-rendering section.
     water-rendering:
+      # region: use this layer's water settings only inside its WG regions;
+      # map: use them across the whole map while the player is inside the layer.
+      scope: region
       mode: fixed
       opacity: 0.15
       tint: "#3F9FD4"

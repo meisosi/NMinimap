@@ -12,6 +12,7 @@ import su.nezushin.nminimap.util.config.Config;
 
 import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,13 +23,16 @@ import java.util.zip.GZIPOutputStream;
 public class ChunkCache {
 
     private Set<ChunkEntry> cachedFiles = ConcurrentHashMap.newKeySet();
+    private volatile boolean cacheIndexComplete;
 
 
     private boolean isDiskFull;
 
     public ChunkCache() {
-        if (!Config.allowFileCache)
+        if (!Config.allowFileCache) {
+            cacheIndexComplete = true;
             return;
+        }
         if (Config.cacheLoadDelay <= 0)
             loadCachedFiles();
         else
@@ -36,67 +40,71 @@ public class ChunkCache {
     }
 
     public void loadCachedFiles() {
-        var deletedOld = 0;
         var deletedInvalidWorlds = 0;
         NMinimap.getInstance().getLogger().info("Loading cache...");
-        var reportTask = SchedulerUtil.getScheduler().async(this::reportCacheLoadingStatus, 40, 40);
+        cacheIndexComplete = false;
         this.cachedFiles.clear();
-        try (var stream = Files.walk(Config.cacheFolder.toPath())) {
-            for (var path : stream.toList()) {
-                var file = path.toFile();
-                if (!file.isFile())
+        Set<Path> namespaces = new HashSet<>();
+        namespaces.add(new ChunkEntry("world", 0, 0, null).getAsFile().getParentFile().toPath());
+        for (var layer : Config.undergroundLayers)
+            namespaces.add(new ChunkEntry("world", 0, 0, layer).getAsFile().getParentFile().toPath());
+        try {
+            for (var namespace : namespaces) {
+                if (!Files.isDirectory(namespace))
                     continue;
-                String[] name = file.getName().split("\\.");
-                if (file.getName().endsWith(".json")) {
-                    file.delete();//old cache clear
-                    deletedOld++;
-                    continue;
-                }
-                if (file.getName().contains(".tmp.")) {
-                    // Broken files
-                    file.delete();
-                    continue;
-                }
-                if (!file.getName().endsWith(".bin.gz"))
-                    continue;
+                try (var stream = Files.list(namespace)) {
+                    for (var path : (Iterable<Path>) stream::iterator) {
+                        var file = path.toFile();
+                        if (!file.isFile())
+                            continue;
+                        String[] name = file.getName().split("\\.");
+                        if (!file.getName().endsWith(".bin.gz") || name.length != 5)
+                            continue;
 
-                int z;
-                su.nezushin.nminimap.util.config.UndergroundLayer layer = null;
-                int layerIndex = name[2].indexOf("_layer_");
-                if (layerIndex != -1) {
-                    z = Integer.parseInt(name[2].substring(0, layerIndex));
-                    String layerId = name[2].substring(layerIndex + "_layer_".length());
-                    layer = Config.undergroundLayers.stream()
-                            .filter(i -> i.id().equalsIgnoreCase(layerId))
-                            .findFirst()
-                            .orElse(null);
-                } else {
-                    z = Integer.parseInt(name[2]);
-                }
-                if (Config.cacheValidateWorlds) {
-                    if (Bukkit.getWorld(name[0]) == null) {
-                        deletedInvalidWorlds++;
-                        file.delete();
-                        continue;
+                        int z;
+                        su.nezushin.nminimap.util.config.UndergroundLayer layer = null;
+                        boolean surface = false;
+                        int surfaceIndex = name[2].indexOf("_surface_layer_");
+                        int layerIndex = surfaceIndex >= 0 ? surfaceIndex : name[2].indexOf("_layer_");
+                        if (layerIndex != -1) {
+                            surface = surfaceIndex >= 0;
+                            String layerId = name[2].substring(layerIndex + (surface ? "_surface_layer_" : "_layer_").length());
+                            layer = Config.undergroundLayers.stream()
+                                    .filter(i -> i.id().equalsIgnoreCase(layerId))
+                                    .findFirst()
+                                    .orElse(null);
+                            if (layer == null)
+                                continue;
+                        }
+                        int x;
+                        try {
+                            x = Integer.parseInt(name[1]);
+                            z = Integer.parseInt(layerIndex == -1 ? name[2] : name[2].substring(0, layerIndex));
+                        } catch (NumberFormatException ex) {
+                            continue;
+                        }
+                        if (Config.cacheValidateWorlds && Bukkit.getWorld(name[0]) == null) {
+                            deletedInvalidWorlds++;
+                            file.delete();
+                            continue;
+                        }
+                        if (!PerWorldSettingsUtil.getAllowFileCache(name[0]))
+                            continue;
+                        var entry = new ChunkEntry(name[0], x, z, layer, surface);
+                        if (!path.normalize().equals(entry.getAsFile().toPath().normalize()))
+                            continue;
+                        cachedFiles.add(entry);
                     }
                 }
-                if (!PerWorldSettingsUtil.getAllowFileCache(name[0]))
-                    continue;
-                var entry = new ChunkEntry(name[0], Integer.parseInt(name[1]), z, layer);
-                if (!file.toPath().normalize().equals(entry.getAsFile().toPath().normalize()))
-                    continue;
-                cachedFiles.add(entry);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
+        } finally {
+            cacheIndexComplete = true;
         }
 
-        reportTask.cancel();
-        NMinimap.getInstance().getLogger().info("Cache init done! Loaded " + cachedFiles.size() + " tiles. Deleted " + deletedOld + " old cache files and " + deletedInvalidWorlds + " invalid world files.");
-    }
-
-    private void reportCacheLoadingStatus() {
-        NMinimap.getInstance().getLogger().info("Loaded " + cachedFiles.size() + " tiles.");
+        NMinimap.getInstance().getLogger().info("Cache init done! Loaded " + cachedFiles.size()
+                + " tiles. Deleted " + deletedInvalidWorlds + " invalid world files.");
     }
 
     public void removeFromCache(ChunkEntry chunk) {
@@ -108,7 +116,7 @@ public class ChunkCache {
     }
 
     public boolean hasInCache(ChunkEntry chunk) {
-        return cachedFiles.contains(chunk);
+        return cachedFiles.contains(chunk) || !cacheIndexComplete && chunk.getAsFile().isFile();
     }
 
     public void loadFromCache(ChunkEntry chunk) {

@@ -4,6 +4,7 @@ import org.bukkit.Color;
 
 public record WaterRenderingSettings(
         Mode mode,
+        Scope scope,
         float opacity,
         float minOpacity,
         float maxOpacity,
@@ -14,6 +15,8 @@ public record WaterRenderingSettings(
         float underwaterDarken
 ) {
     public enum Mode { VANILLA, FIXED, DEPTH, DISABLED }
+
+    public enum Scope { REGION, MAP }
 
     public enum ColorSource { WATER, BOTTOM }
 

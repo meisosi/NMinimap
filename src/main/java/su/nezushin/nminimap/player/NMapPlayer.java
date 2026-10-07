@@ -19,6 +19,7 @@ import su.nezushin.nminimap.util.DisallowedWorldsUtil;
 import su.nezushin.nminimap.util.config.Config;
 import su.nezushin.nminimap.util.config.Permission;
 import su.nezushin.nminimap.util.config.UndergroundLayer;
+import su.nezushin.nminimap.util.config.WaterRenderingSettings;
 
 import java.util.Arrays;
 
@@ -138,7 +139,13 @@ public class NMapPlayer implements AnvilORMSerializable {
                 var localX = Math.floorMod(wx, 16);
                 var localZ = Math.floorMod(wz, 16);
 
-                var chunk = new ChunkEntry(worldName, cx, cz, layer);
+                boolean insideLayer = layer != null && NMinimap.getInstance().getWorldGuardManager()
+                        .isInsideLayer(new Location(world, wx, layer.renderFromY(), wz), layer);
+                boolean layerWaterOnMap = layer != null && !insideLayer
+                        && layer.waterRendering().scope() == WaterRenderingSettings.Scope.MAP;
+                var chunk = insideLayer
+                        ? new ChunkEntry(worldName, cx, cz, layer)
+                        : new ChunkEntry(worldName, cx, cz, layerWaterOnMap ? layer : null, layerWaterOnMap);
                 var bytes = chunkManager.getOrRenderChunk(chunk).get(scale);
 
                 chunkManager.getLastChunkUse().put(chunk, System.currentTimeMillis());
@@ -147,18 +154,8 @@ public class NMapPlayer implements AnvilORMSerializable {
                 var indexZZ = Math.floorDiv(localZ, scale);
 
                 var color = colorAt(bytes, indexXX, indexZZ, chunkSize);
-                if (layer != null) {
-                    // Check if block outside WG layer region
-                    if (!NMinimap.getInstance().getWorldGuardManager().isInsideLayer(new Location(world, wx, layer.renderFromY(), wz), layer)) {
-                        // Load normal surface chunk for outside region
-                        var normalChunk = new ChunkEntry(worldName, cx, cz, null);
-                        var normalBytes = chunkManager.getOrRenderChunk(normalChunk).get(scale);
-                        chunkManager.getLastChunkUse().put(normalChunk, System.currentTimeMillis());
-
-                        var normalColor = colorAt(normalBytes, indexXX, indexZZ, chunkSize);
-                        color = normalColor != 0 ? su.nezushin.nminimap.util.ColorUtil.darken(normalColor, layer.darken()) : 0;
-                    }
-                }
+                if (layer != null && !insideLayer && color != 0)
+                    color = su.nezushin.nminimap.util.ColorUtil.darken(color, layer.darken());
 
                 mapData[x + (z * fullMapSize)] = color;
             }

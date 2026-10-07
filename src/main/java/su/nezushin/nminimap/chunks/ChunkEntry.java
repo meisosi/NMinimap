@@ -8,12 +8,21 @@ import su.nezushin.nminimap.util.config.UndergroundLayer;
 
 import java.io.File;
 
-public record ChunkEntry(String world, int x, int z, UndergroundLayer layer) {
+public record ChunkEntry(String world, int x, int z, UndergroundLayer layer, boolean surface) {
+
+    public ChunkEntry(String world, int x, int z, UndergroundLayer layer) {
+        this(world, x, z, layer, false);
+    }
+
+    public ChunkEntry {
+        if (surface && layer == null)
+            throw new IllegalArgumentException("A surface tile override requires an underground layer");
+    }
 
     public File getAsFile() {
-        String layerSuffix = layer != null ? "_layer_" + layer.id() : "";
+        String layerSuffix = layer == null ? "" : surface ? "_surface_layer_" + layer.id() : "_layer_" + layer.id();
         int settingsHash = layer != null ? layer.hashCode() : Config.waterRendering.hashCode();
-        var namespace = new File(Config.cacheFolder, "render-v6-" + Integer.toUnsignedString(settingsHash, 16));
+        var namespace = new File(Config.cacheFolder, "render-v8-" + Integer.toUnsignedString(settingsHash, 16));
         return new File(namespace, world + "." + x + "." + z + layerSuffix + ".bin.gz");
     }
 

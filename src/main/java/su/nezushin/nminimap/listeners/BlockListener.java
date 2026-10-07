@@ -13,6 +13,7 @@ import su.nezushin.nminimap.NMinimap;
 import su.nezushin.nminimap.chunks.ChunkEntry;
 import su.nezushin.nminimap.util.PerWorldSettingsUtil;
 import su.nezushin.nminimap.util.config.Config;
+import su.nezushin.nminimap.util.config.WaterRenderingSettings;
 
 import java.util.Set;
 
@@ -47,6 +48,11 @@ public class BlockListener implements Listener {
                 if (updateSurface)
                     manager.reRenderChunk(new ChunkEntry(world, chunkX, chunkZ, null));
                 for (var layer : Config.undergroundLayers) {
+                    if (updateSurface && layer.waterRendering().scope() == WaterRenderingSettings.Scope.MAP) {
+                        var surfaceEntry = new ChunkEntry(world, chunkX, chunkZ, layer, true);
+                        if (manager.getLoadedTiles().containsKey(surfaceEntry) || manager.getChunkCache().hasInCache(surfaceEntry))
+                            manager.reRenderChunk(surfaceEntry);
+                    }
                     int radius = layer.smartDescend().minConnectedColumns() > 1 ? 1 : 0;
                     for (int dx = -radius; dx <= radius; dx++)
                         for (int dz = -radius; dz <= radius; dz++) {
